@@ -18,6 +18,7 @@ remappings = [
     "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
     "openzeppelin-foundry-upgrades/=lib/openzeppelin-foundry-upgrades/src/",
     "diamond-contracts-core/=lib/diamond-contracts-core/contracts/",
+    "solady/=lib/solady/src/",
 ]
 
 ignored_warnings_from = ["lib/openzeppelin-foundry-upgrades"]

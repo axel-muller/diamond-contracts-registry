@@ -136,13 +136,16 @@ contract DiamondRegistrarControllerTest is Test {
     }
 
     function test_Register_EmitsEvent() public {
+        string memory name = "alice";
+        bytes32 nameHash = keccak256(bytes(name));
+
         vm.deal(alice, mintingFee);
 
         vm.expectEmit(true, false, false, true, address(registrar));
-        emit DiamondRegistrarController.NameChanged(alice, "alice");
+        emit DiamondRegistrarController.NameRegistered(alice, nameHash, name);
 
         vm.prank(alice);
-        registrar.register{ value: mintingFee }("alice");
+        registrar.register{ value: mintingFee }(name);
     }
 
     function test_Register_SetRegisteredNameUnavailable() public {

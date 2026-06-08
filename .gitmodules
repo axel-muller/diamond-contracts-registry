@@ -13,3 +13,6 @@
 [submodule "lib/diamond-contracts-core"]
 	path = lib/diamond-contracts-core
 	url = https://github.com/DMDcoin/diamond-contracts-core
+[submodule "lib/solady"]
+	path = lib/solady
+	url = https://github.com/vectorized/solady

@@ -2,5 +2,5 @@
 pragma solidity 0.8.25;
 
 interface IDiamondNames {
-    function mint(address to, uint256 id) external;
+    function register(uint256 id, address owner, uint256 expiration) external;
 }

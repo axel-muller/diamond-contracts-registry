@@ -10,6 +10,10 @@ import { Controllable } from "./lib/Controllable.sol";
 contract DiamondNames is OwnableUpgradeable, ERC721Upgradeable, Controllable {
     string public baseURI;
 
+    mapping(uint256 => uint256) private _expires;
+
+    error NotAvailable(uint256 id);
+
     /**
      * @custom:oz-upgrades-unsafe-allow constructor
      */
@@ -25,8 +29,18 @@ contract DiamondNames is OwnableUpgradeable, ERC721Upgradeable, Controllable {
         baseURI = _baseUri;
     }
 
-    function mint(address to, uint256 id) external onlyController {
-        _mint(to, id);
+    function register(uint256 id, address owner, uint256 expiration) external onlyController {
+        _expires[id] = expiration;
+
+        _mint(owner, id);
+    }
+
+    function available(uint256 id) public view returns (bool) {
+        return _expires[id] < block.timestamp;
+    }
+
+    function nameExpires(uint256 id) public view returns (uint256) {
+        return _expires[id];
     }
 
     function _baseURI() internal view override returns (string memory) {

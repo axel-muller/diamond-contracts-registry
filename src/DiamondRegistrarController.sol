@@ -4,6 +4,8 @@ pragma solidity 0.8.25;
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
+import { DateTimeLib } from "solady/utils/DateTimeLib.sol";
+
 import { ValueGuards } from "diamond-contracts-core/lib/ValueGuards.sol";
 
 import { IDiamondNames } from "./interface/IDiamondNames.sol";
@@ -15,9 +17,11 @@ contract DiamondRegistrarController is Initializable, OwnableUpgradeable, ValueG
 
     uint256 public constant MIN_NAME_LENGTH = 2;
     uint256 public constant MAX_NAME_LENGHT = 63;
-    uint256 public constant DEFAULT_MINTING_FEE = 5 ether;
 
-    uint256 private constant BASE_MINTING_FEE = 78_125_000 gwei; // 0.078125 DMD
+    uint256 public constant DEFAULT_MINTING_FEE = 5 ether;
+    uint256 public constant BASE_MINTING_FEE = 78_125_000 gwei; // 0.078125 DMD
+
+    uint256 public constant EXPIRATION_TIME_YEARS = 10;
 
     /**
      * mapping between address and the current name.
@@ -25,24 +29,21 @@ contract DiamondRegistrarController is Initializable, OwnableUpgradeable, ValueG
     mapping(address => bytes) public names;
 
     /**
-     * mapping between the hash of the name and the address that owns it.abi
+     * mapping between the hash of the name and the address that owns it
      */
     mapping(bytes32 => address) public namesReverse;
 
-    /**
-     * mapping of the costs for setting the name.
-     */
-    mapping(address => uint256) public costs;
+    mapping(address => uint256) public activations;
 
     IDiamondNames public diamondNames;
 
     /**
-     * funds are sent to this reinsert pot.
+     * Minting/activation fees are sent to the reinsert pot.
      */
     address public reinsertPotAddress;
 
     /**
-     * maximum costs for setting the name.
+     * current cost for setting the name.
      */
     uint256 public mintingFee;
 
@@ -51,8 +52,7 @@ contract DiamondRegistrarController is Initializable, OwnableUpgradeable, ValueG
     error InvalidName();
     error NotAvailable();
 
-    // event AddressChanged(address indexed node, uint coinType, bytes newAddress);
-    event NameChanged(address indexed node, string name);
+    event NameRegistered(address indexed node, bytes32 indexed nameHash, string name);
 
     event SetMintingFee(uint256 indexed value);
 
@@ -123,10 +123,14 @@ contract DiamondRegistrarController is Initializable, OwnableUpgradeable, ValueG
 
         TransferUtils.transferNative(reinsertPotAddress, msg.value);
 
-        diamondNames.mint(msg.sender, nameId);
+        uint256 expirationTimestamp = DateTimeLib.addYears(block.timestamp, EXPIRATION_TIME_YEARS);
 
-        emit NameChanged(msg.sender, _name);
+        diamondNames.register(nameId, msg.sender, expirationTimestamp);
+
+        emit NameRegistered(msg.sender, nameHash, _name);
     }
+
+    function activate() external { }
 
     function getAddressOfName(string calldata _name) external view returns (address) {
         bytes32 nameHash = getHashOfName(_name);
@@ -150,15 +154,6 @@ contract DiamondRegistrarController is Initializable, OwnableUpgradeable, ValueG
 
         // this could also be a hash collison. bad luck, we don't care about this case.
         return namesReverse[nameHash] == address(0);
-    }
-
-    function getSetNameCost(address node) public view returns (uint256) {
-        uint256 cost = costs[node];
-        if (cost > 0) {
-            return cost;
-        } else {
-            return 1 ether; // , "Fee is exactly 1 DMD");
-        }
     }
 
     function getHashOfName(string calldata _name) public pure returns (bytes32) {
@@ -199,6 +194,8 @@ contract DiamondRegistrarController is Initializable, OwnableUpgradeable, ValueG
 
         return true;
     }
+
+    function _activate(string memory name) private { }
 
     function _mintingFeeAllowedValues() private pure returns (uint256[] memory) {
         uint256[] memory values = new uint256[](10);
