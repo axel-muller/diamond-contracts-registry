@@ -7,7 +7,7 @@ import { ERC721Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC
 
 import { Controllable } from "./lib/Controllable.sol";
 
-contract DiamondNames is OwnableUpgradeable, ERC721Upgradeable, Controllable {
+contract DMDNames is OwnableUpgradeable, ERC721Upgradeable, Controllable {
     string public baseURI;
 
     mapping(uint256 => uint256) private _expires;

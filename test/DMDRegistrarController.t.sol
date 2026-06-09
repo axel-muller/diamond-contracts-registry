@@ -10,8 +10,8 @@ import { Upgrades } from "openzeppelin-foundry-upgrades/Upgrades.sol";
 
 import { ValueGuards } from "diamond-contracts-core/lib/ValueGuards.sol";
 
-import { DiamondNames } from "src/DiamondNames.sol";
-import { DiamondRegistrarController } from "src/DiamondRegistrarController.sol";
+import { DMDNames } from "src/DMDNames.sol";
+import { DMDRegistrarController } from "src/DMDRegistrarController.sol";
 
 contract DiamondRegistrarControllerTest is Test {
     struct NameValidationTestCase {
@@ -19,8 +19,8 @@ contract DiamondRegistrarControllerTest is Test {
         bool expected;
     }
 
-    DiamondRegistrarController public registrar;
-    DiamondNames public diamondNames;
+    DMDRegistrarController public registrar;
+    DMDNames public diamondNames;
 
     address public constant REINSERT_POT = address(0x2000000000000000000000000000000000000001);
     string public constant CONTROLLER_CONTRACT = "DiamondRegistrarController.sol:DiamondRegistrarController";
@@ -38,17 +38,17 @@ contract DiamondRegistrarControllerTest is Test {
         alice = makeAddr("alice");
         bob = makeAddr("bob");
 
-        diamondNames = DiamondNames(
+        diamondNames = DMDNames(
             Upgrades.deployTransparentProxy(
-                NAMES_CONTRACT, owner, abi.encodeCall(DiamondNames.initialize, (owner, BASE_URI))
+                NAMES_CONTRACT, owner, abi.encodeCall(DMDNames.initialize, (owner, BASE_URI))
             )
         );
 
-        registrar = DiamondRegistrarController(
+        registrar = DMDRegistrarController(
             Upgrades.deployTransparentProxy(
                 CONTROLLER_CONTRACT,
                 owner,
-                abi.encodeCall(DiamondRegistrarController.initialize, (owner, REINSERT_POT, address(diamondNames)))
+                abi.encodeCall(DMDRegistrarController.initialize, (owner, REINSERT_POT, address(diamondNames)))
             )
         );
 
@@ -68,8 +68,8 @@ contract DiamondRegistrarControllerTest is Test {
     function test_Initialize_InvalidOwner_Reverts() public {
         bytes memory initData;
 
-        DiamondRegistrarController _registrar =
-            DiamondRegistrarController(Upgrades.deployTransparentProxy(CONTROLLER_CONTRACT, owner, initData));
+        DMDRegistrarController _registrar =
+            DMDRegistrarController(Upgrades.deployTransparentProxy(CONTROLLER_CONTRACT, owner, initData));
 
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableInvalidOwner.selector, address(0)));
         _registrar.initialize(address(0), REINSERT_POT, address(diamondNames));
@@ -78,20 +78,20 @@ contract DiamondRegistrarControllerTest is Test {
     function test_Initialize_InvalidReinsertPot_Reverts() public {
         bytes memory initData;
 
-        DiamondRegistrarController _registrar =
-            DiamondRegistrarController(Upgrades.deployTransparentProxy(CONTROLLER_CONTRACT, owner, initData));
+        DMDRegistrarController _registrar =
+            DMDRegistrarController(Upgrades.deployTransparentProxy(CONTROLLER_CONTRACT, owner, initData));
 
-        vm.expectRevert(DiamondRegistrarController.InvalidAddress.selector);
+        vm.expectRevert(DMDRegistrarController.InvalidAddress.selector);
         _registrar.initialize(owner, address(0), address(diamondNames));
     }
 
     function test_Initialize_InvalidDiamondNames_Reverts() public {
         bytes memory initData;
 
-        DiamondRegistrarController _registrar =
-            DiamondRegistrarController(Upgrades.deployTransparentProxy(CONTROLLER_CONTRACT, owner, initData));
+        DMDRegistrarController _registrar =
+            DMDRegistrarController(Upgrades.deployTransparentProxy(CONTROLLER_CONTRACT, owner, initData));
 
-        vm.expectRevert(DiamondRegistrarController.InvalidAddress.selector);
+        vm.expectRevert(DMDRegistrarController.InvalidAddress.selector);
         _registrar.initialize(owner, REINSERT_POT, address(0));
     }
 
@@ -109,7 +109,7 @@ contract DiamondRegistrarControllerTest is Test {
 
     function test_Register_NoFundsSent_Reverts() public {
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(DiamondRegistrarController.InvalidMintingFee.selector, mintingFee, 0));
+        vm.expectRevert(abi.encodeWithSelector(DMDRegistrarController.InvalidMintingFee.selector, mintingFee, 0));
         registrar.register("alice");
     }
 
@@ -118,7 +118,7 @@ contract DiamondRegistrarControllerTest is Test {
         vm.prank(alice);
 
         vm.expectRevert(
-            abi.encodeWithSelector(DiamondRegistrarController.InvalidMintingFee.selector, mintingFee, mintingFee - 1)
+            abi.encodeWithSelector(DMDRegistrarController.InvalidMintingFee.selector, mintingFee, mintingFee - 1)
         );
         registrar.register{ value: mintingFee - 1 }("alice");
     }
@@ -142,7 +142,7 @@ contract DiamondRegistrarControllerTest is Test {
         vm.deal(alice, mintingFee);
 
         vm.expectEmit(true, false, false, true, address(registrar));
-        emit DiamondRegistrarController.NameRegistered(alice, nameHash, name);
+        emit DMDRegistrarController.NameRegistered(alice, nameHash, name);
 
         vm.prank(alice);
         registrar.register{ value: mintingFee }(name);
@@ -172,14 +172,14 @@ contract DiamondRegistrarControllerTest is Test {
 
         vm.deal(bob, mintingFee);
         vm.prank(bob);
-        vm.expectRevert(DiamondRegistrarController.NotAvailable.selector);
+        vm.expectRevert(DMDRegistrarController.NotAvailable.selector);
         registrar.register{ value: mintingFee }("alice");
     }
 
     function test_Register_InvalidName_Reverts() public {
         vm.deal(alice, mintingFee);
         vm.prank(alice);
-        vm.expectRevert(DiamondRegistrarController.InvalidName.selector);
+        vm.expectRevert(DMDRegistrarController.InvalidName.selector);
         registrar.register{ value: mintingFee }("-alice");
     }
 
@@ -204,7 +204,7 @@ contract DiamondRegistrarControllerTest is Test {
         vm.prank(owner);
 
         vm.expectEmit(true, false, false, false, address(registrar));
-        emit DiamondRegistrarController.SetMintingFee(newFee);
+        emit DMDRegistrarController.SetMintingFee(newFee);
         registrar.setMintingFee(newFee);
 
         assertEq(registrar.mintingFee(), newFee);

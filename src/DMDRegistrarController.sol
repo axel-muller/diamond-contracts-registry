@@ -8,12 +8,17 @@ import { DateTimeLib } from "solady/utils/DateTimeLib.sol";
 
 import { ValueGuards } from "diamond-contracts-core/lib/ValueGuards.sol";
 
-import { IDiamondNames } from "./interface/IDiamondNames.sol";
+import { IDMDNames } from "./interface/IDMDNames.sol";
+import { IENS } from "./interface/IENS.sol";
+import { IResolver } from "./interface/IResolver.sol";
 import { ByteUtils } from "./lib/ByteUtils.sol";
 import { TransferUtils } from "./lib/TransferUtils.sol";
 
-contract DiamondRegistrarController is Initializable, OwnableUpgradeable, ValueGuards {
+contract DMDRegistrarController is Initializable, OwnableUpgradeable, ValueGuards {
     using ByteUtils for bytes1;
+
+    // keccak256(abi.encodePacked(bytes32(0), keccak256("dmd")))
+    bytes32 public constant DMD_NODE = 0x9904bf4b5751e3b6a8b75d14c49424160de1a8fa8a90fd5c9fccdeac0503e612;
 
     uint256 public constant MIN_NAME_LENGTH = 2;
     uint256 public constant MAX_NAME_LENGHT = 63;
@@ -35,7 +40,11 @@ contract DiamondRegistrarController is Initializable, OwnableUpgradeable, ValueG
 
     mapping(address => uint256) public activations;
 
-    IDiamondNames public diamondNames;
+    IDMDNames public diamondNames;
+
+    IENS public registry;
+
+    IResolver public resolver;
 
     /**
      * Minting/activation fees are sent to the reinsert pot.
@@ -66,7 +75,9 @@ contract DiamondRegistrarController is Initializable, OwnableUpgradeable, ValueG
     function initialize(
         address _initialOwner,
         address _reinsertPotAddress,
-        address _diamondNames
+        address _diamondNames,
+        address _registry,
+        address _resolver
     ) external initializer {
         if (_reinsertPotAddress == address(0)) {
             revert InvalidAddress();
@@ -76,9 +87,19 @@ contract DiamondRegistrarController is Initializable, OwnableUpgradeable, ValueG
             revert InvalidAddress();
         }
 
+        if (_registry == address(0)) {
+            revert InvalidAddress();
+        }
+
+        if (_resolver == address(0)) {
+            revert InvalidAddress();
+        }
+
         __Ownable_init(_initialOwner);
 
-        diamondNames = IDiamondNames(_diamondNames);
+        diamondNames = IDMDNames(_diamondNames);
+        registry = IENS(_registry);
+        resolver = IResolver(_resolver);
         reinsertPotAddress = _reinsertPotAddress;
 
         mintingFee = DEFAULT_MINTING_FEE;
@@ -107,8 +128,9 @@ contract DiamondRegistrarController is Initializable, OwnableUpgradeable, ValueG
             revert NotAvailable();
         }
 
-        bytes32 nameHash = getHashOfName(_name);
-        uint256 nameId = uint256(nameHash);
+        bytes32 labelHash = getHashOfName(_name);
+        uint256 labelId = uint256(labelHash);
+        bytes32 node = keccak256(abi.encodePacked(DMD_NODE, labelHash));
 
         bytes storage originalString = names[msg.sender];
 
@@ -119,15 +141,17 @@ contract DiamondRegistrarController is Initializable, OwnableUpgradeable, ValueG
         }
 
         names[msg.sender] = bytes(_name);
-        namesReverse[nameHash] = msg.sender;
+        namesReverse[labelHash] = msg.sender;
 
         TransferUtils.transferNative(reinsertPotAddress, msg.value);
 
         uint256 expirationTimestamp = DateTimeLib.addYears(block.timestamp, EXPIRATION_TIME_YEARS);
 
-        diamondNames.register(nameId, msg.sender, expirationTimestamp);
+        diamondNames.register(labelId, msg.sender, expirationTimestamp);
+        registry.setRecord(node, msg.sender, address(resolver), 0);
+        resolver.setAddr(node, msg.sender);
 
-        emit NameRegistered(msg.sender, nameHash, _name);
+        emit NameRegistered(msg.sender, labelHash, _name);
     }
 
     function activate() external { }
