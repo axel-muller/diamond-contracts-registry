@@ -12,8 +12,12 @@ import { ValueGuards } from "diamond-contracts-core/lib/ValueGuards.sol";
 
 import { DMDNames } from "src/DMDNames.sol";
 import { DMDRegistrarController } from "src/DMDRegistrarController.sol";
+import { DMDRegistry } from "src/DMDRegistry.sol";
+import { DMDResolver } from "src/DMDResolver.sol";
+import { IAddrResolver } from "src/interface/IAddrResolver.sol";
+import { Errors } from "src/lib/Errors.sol";
 
-contract DiamondRegistrarControllerTest is Test {
+contract DMDRegistrarControllerTest is Test {
     struct NameValidationTestCase {
         string name;
         bool expected;
@@ -21,11 +25,18 @@ contract DiamondRegistrarControllerTest is Test {
 
     DMDRegistrarController public registrar;
     DMDNames public diamondNames;
+    DMDRegistry public registry;
+    DMDResolver public resolver;
 
     address public constant REINSERT_POT = address(0x2000000000000000000000000000000000000001);
-    string public constant CONTROLLER_CONTRACT = "DiamondRegistrarController.sol:DiamondRegistrarController";
-    string public constant NAMES_CONTRACT = "DiamondNames.sol:DiamondNames";
+    string public constant CONTROLLER_CONTRACT = "DMDRegistrarController.sol:DMDRegistrarController";
+    string public constant NAMES_CONTRACT = "DMDNames.sol:DMDNames";
+    string public constant REGISTRY_CONTRACT = "DMDRegistry.sol:DMDRegistry";
+    string public constant RESOLVER_CONTRACT = "DMDResolver.sol:DMDResolver";
     string public constant BASE_URI = "https://names.bit.diamonds/";
+
+    bytes32 public constant ROOT_NODE = bytes32(0);
+    bytes32 public constant DMD_LABEL = keccak256("dmd");
 
     address public owner;
     address public alice;
@@ -38,6 +49,16 @@ contract DiamondRegistrarControllerTest is Test {
         alice = makeAddr("alice");
         bob = makeAddr("bob");
 
+        registry = DMDRegistry(
+            Upgrades.deployTransparentProxy(REGISTRY_CONTRACT, owner, abi.encodeCall(DMDRegistry.initialize, (owner)))
+        );
+
+        resolver = DMDResolver(
+            Upgrades.deployTransparentProxy(
+                RESOLVER_CONTRACT, owner, abi.encodeCall(DMDResolver.initialize, (address(registry)))
+            )
+        );
+
         diamondNames = DMDNames(
             Upgrades.deployTransparentProxy(
                 NAMES_CONTRACT, owner, abi.encodeCall(DMDNames.initialize, (owner, BASE_URI))
@@ -48,7 +69,10 @@ contract DiamondRegistrarControllerTest is Test {
             Upgrades.deployTransparentProxy(
                 CONTROLLER_CONTRACT,
                 owner,
-                abi.encodeCall(DMDRegistrarController.initialize, (owner, REINSERT_POT, address(diamondNames)))
+                abi.encodeCall(
+                    DMDRegistrarController.initialize,
+                    (owner, REINSERT_POT, address(diamondNames), address(registry), address(resolver))
+                )
             )
         );
 
@@ -56,6 +80,9 @@ contract DiamondRegistrarControllerTest is Test {
 
         vm.prank(owner);
         diamondNames.setController(address(registrar), true);
+
+        vm.prank(owner);
+        registry.setSubnodeOwner(ROOT_NODE, DMD_LABEL, address(registrar));
     }
 
     function _registerName(address user, string memory name) internal {
@@ -65,44 +92,61 @@ contract DiamondRegistrarControllerTest is Test {
         registrar.register{ value: mintingFee }(name);
     }
 
-    function test_Initialize_InvalidOwner_Reverts() public {
+    function _nodeOf(string memory name) internal view returns (bytes32) {
+        return keccak256(abi.encodePacked(registrar.DMD_NODE(), keccak256(bytes(name))));
+    }
+
+    function _deployUninitializedController() internal returns (DMDRegistrarController) {
         bytes memory initData;
 
-        DMDRegistrarController _registrar =
-            DMDRegistrarController(Upgrades.deployTransparentProxy(CONTROLLER_CONTRACT, owner, initData));
+        return DMDRegistrarController(Upgrades.deployTransparentProxy(CONTROLLER_CONTRACT, owner, initData));
+    }
+
+    function test_Initialize_InvalidOwner_Reverts() public {
+        DMDRegistrarController _registrar = _deployUninitializedController();
 
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableInvalidOwner.selector, address(0)));
-        _registrar.initialize(address(0), REINSERT_POT, address(diamondNames));
+        _registrar.initialize(address(0), REINSERT_POT, address(diamondNames), address(registry), address(resolver));
     }
 
     function test_Initialize_InvalidReinsertPot_Reverts() public {
-        bytes memory initData;
+        DMDRegistrarController _registrar = _deployUninitializedController();
 
-        DMDRegistrarController _registrar =
-            DMDRegistrarController(Upgrades.deployTransparentProxy(CONTROLLER_CONTRACT, owner, initData));
-
-        vm.expectRevert(DMDRegistrarController.InvalidAddress.selector);
-        _registrar.initialize(owner, address(0), address(diamondNames));
+        vm.expectRevert(Errors.InvalidReinsertPotAddress.selector);
+        _registrar.initialize(owner, address(0), address(diamondNames), address(registry), address(resolver));
     }
 
     function test_Initialize_InvalidDiamondNames_Reverts() public {
-        bytes memory initData;
+        DMDRegistrarController _registrar = _deployUninitializedController();
 
-        DMDRegistrarController _registrar =
-            DMDRegistrarController(Upgrades.deployTransparentProxy(CONTROLLER_CONTRACT, owner, initData));
+        vm.expectRevert(Errors.InvalidNamesContract.selector);
+        _registrar.initialize(owner, REINSERT_POT, address(0), address(registry), address(resolver));
+    }
 
-        vm.expectRevert(DMDRegistrarController.InvalidAddress.selector);
-        _registrar.initialize(owner, REINSERT_POT, address(0));
+    function test_Initialize_InvalidRegistry_Reverts() public {
+        DMDRegistrarController _registrar = _deployUninitializedController();
+
+        vm.expectRevert(Errors.InvalidRegistry.selector);
+        _registrar.initialize(owner, REINSERT_POT, address(diamondNames), address(0), address(resolver));
+    }
+
+    function test_Initialize_InvalidResolver_Reverts() public {
+        DMDRegistrarController _registrar = _deployUninitializedController();
+
+        vm.expectRevert(Errors.InvalidResolver.selector);
+        _registrar.initialize(owner, REINSERT_POT, address(diamondNames), address(registry), address(0));
     }
 
     function test_Initialize_DoubleInitialization_Reverts() public {
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        registrar.initialize(owner, REINSERT_POT, address(diamondNames));
+        registrar.initialize(owner, REINSERT_POT, address(diamondNames), address(registry), address(resolver));
     }
 
     function test_Initialize() public view {
         assertEq(registrar.reinsertPotAddress(), REINSERT_POT);
         assertEq(address(registrar.diamondNames()), address(diamondNames));
+        assertEq(address(registrar.registry()), address(registry));
+        assertEq(address(registrar.resolver()), address(resolver));
         assertEq(registrar.mintingFee(), registrar.DEFAULT_MINTING_FEE());
         assertEq(registrar.owner(), owner);
     }
@@ -121,6 +165,17 @@ contract DiamondRegistrarControllerTest is Test {
             abi.encodeWithSelector(DMDRegistrarController.InvalidMintingFee.selector, mintingFee, mintingFee - 1)
         );
         registrar.register{ value: mintingFee - 1 }("alice");
+    }
+
+    function test_Register_RegistrarInactive_Reverts() public {
+        // root owner takes the dmd node back from the controller
+        vm.prank(owner);
+        registry.setSubnodeOwner(ROOT_NODE, DMD_LABEL, owner);
+
+        vm.deal(alice, mintingFee);
+        vm.prank(alice);
+        vm.expectRevert(DMDRegistrarController.RegistrarInactive.selector);
+        registrar.register{ value: mintingFee }("alice");
     }
 
     function test_Register_TransfersFeeToReinsertPot() public {
@@ -167,6 +222,35 @@ contract DiamondRegistrarControllerTest is Test {
         assertEq(diamondNames.ownerOf(nameId), alice);
     }
 
+    function test_Register_SetsRegistryRecord() public {
+        string memory name = "alice";
+        _registerName(alice, name);
+
+        bytes32 node = _nodeOf(name);
+
+        assertTrue(registry.recordExists(node));
+        assertEq(registry.owner(node), alice);
+        assertEq(registry.resolver(node), address(resolver));
+        assertEq(registry.ttl(node), 0);
+    }
+
+    function test_Register_ForwardResolution_ENSPath() public {
+        string memory name = "alice";
+        _registerName(alice, name);
+
+        bytes32 node = _nodeOf(name);
+
+        address resolverAddr = registry.resolver(node);
+        assertEq(resolverAddr, address(resolver));
+
+        assertEq(IAddrResolver(resolverAddr).addr(node), alice);
+    }
+
+    function test_Resolver_SupportsAddrInterface() public view {
+        assertTrue(resolver.supportsInterface(0x01ffc9a7)); // ERC-165
+        assertTrue(resolver.supportsInterface(0x3b3b57de)); // addr(bytes32)
+    }
+
     function test_Register_NameAlreadyTaken_Reverts() public {
         _registerName(alice, "alice");
 
@@ -188,14 +272,6 @@ contract DiamondRegistrarControllerTest is Test {
         _registerName(alice, name);
 
         assertEq(registrar.getAddressOfName(name), alice);
-    }
-
-    function test_Addr_ReturnsOwnerByNameHash() public {
-        string memory name = "myawesomename";
-        _registerName(bob, name);
-
-        bytes32 nameHash = registrar.getHashOfName(name);
-        assertEq(registrar.addr(nameHash), bob);
     }
 
     function test_SetMintingFee() public {

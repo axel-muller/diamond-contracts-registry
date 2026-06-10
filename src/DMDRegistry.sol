@@ -31,8 +31,8 @@ contract DMDRegistry is Initializable, IENS {
         _disableInitializers();
     }
 
-    function initialize(address _owner) external initializer {
-        _records[0x0].owner = _owner;
+    function initialize(address _rootOwner) external initializer {
+        _records[0x0].owner = _rootOwner;
     }
 
     /**

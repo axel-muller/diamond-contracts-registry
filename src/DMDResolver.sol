@@ -11,7 +11,7 @@ import { IAddrResolver, IResolver } from "./interface/IResolver.sol";
 
 import { Errors } from "./lib/Errors.sol";
 
-contract DiamondResolver is Initializable, ERC165Upgradeable, IResolver {
+contract DMDResolver is Initializable, ERC165Upgradeable, IResolver {
     IENS public registry;
 
     mapping(bytes32 => address) addresses;
@@ -32,8 +32,14 @@ contract DiamondResolver is Initializable, ERC165Upgradeable, IResolver {
         _disableInitializers();
     }
 
-    function initialize() external initializer {
+    function initialize(address _registry) external initializer {
+        if (_registry == address(0)) {
+            revert Errors.InvalidRegistry();
+        }
+
         __ERC165_init();
+
+        registry = IENS(_registry);
     }
 
     function setAddr(bytes32 node, address a) external authorised(node) {

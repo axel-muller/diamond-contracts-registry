@@ -12,6 +12,7 @@ import { IDMDNames } from "./interface/IDMDNames.sol";
 import { IENS } from "./interface/IENS.sol";
 import { IResolver } from "./interface/IResolver.sol";
 import { ByteUtils } from "./lib/ByteUtils.sol";
+import { Errors } from "./lib/Errors.sol";
 import { TransferUtils } from "./lib/TransferUtils.sol";
 
 contract DMDRegistrarController is Initializable, OwnableUpgradeable, ValueGuards {
@@ -56,14 +57,22 @@ contract DMDRegistrarController is Initializable, OwnableUpgradeable, ValueGuard
      */
     uint256 public mintingFee;
 
-    error InvalidAddress();
     error InvalidMintingFee(uint256 want, uint256 sent);
     error InvalidName();
     error NotAvailable();
+    error RegistrarInactive();
 
     event NameRegistered(address indexed node, bytes32 indexed nameHash, string name);
 
     event SetMintingFee(uint256 indexed value);
+
+    modifier activeRegistrar() {
+        if (registry.owner(DMD_NODE) != address(this)) {
+            revert RegistrarInactive();
+        }
+
+        _;
+    }
 
     /**
      * @custom:oz-upgrades-unsafe-allow constructor
@@ -80,19 +89,19 @@ contract DMDRegistrarController is Initializable, OwnableUpgradeable, ValueGuard
         address _resolver
     ) external initializer {
         if (_reinsertPotAddress == address(0)) {
-            revert InvalidAddress();
+            revert Errors.InvalidReinsertPotAddress();
         }
 
         if (_diamondNames == address(0)) {
-            revert InvalidAddress();
+            revert Errors.InvalidNamesContract();
         }
 
         if (_registry == address(0)) {
-            revert InvalidAddress();
+            revert Errors.InvalidRegistry();
         }
 
         if (_resolver == address(0)) {
-            revert InvalidAddress();
+            revert Errors.InvalidResolver();
         }
 
         __Ownable_init(_initialOwner);
@@ -115,7 +124,7 @@ contract DMDRegistrarController is Initializable, OwnableUpgradeable, ValueGuard
         emit SetMintingFee(_value);
     }
 
-    function register(string calldata _name) external payable {
+    function register(string calldata _name) external payable activeRegistrar {
         if (msg.value != mintingFee) {
             revert InvalidMintingFee(mintingFee, msg.value);
         }
@@ -143,18 +152,20 @@ contract DMDRegistrarController is Initializable, OwnableUpgradeable, ValueGuard
         names[msg.sender] = bytes(_name);
         namesReverse[labelHash] = msg.sender;
 
-        TransferUtils.transferNative(reinsertPotAddress, msg.value);
-
         uint256 expirationTimestamp = DateTimeLib.addYears(block.timestamp, EXPIRATION_TIME_YEARS);
 
         diamondNames.register(labelId, msg.sender, expirationTimestamp);
-        registry.setRecord(node, msg.sender, address(resolver), 0);
+
+        registry.setSubnodeRecord(DMD_NODE, labelHash, address(this), address(resolver), 0);
         resolver.setAddr(node, msg.sender);
+        registry.setOwner(node, msg.sender);
+
+        TransferUtils.transferNative(reinsertPotAddress, msg.value);
 
         emit NameRegistered(msg.sender, labelHash, _name);
     }
 
-    function activate() external { }
+    function activate() external activeRegistrar { }
 
     function getAddressOfName(string calldata _name) external view returns (address) {
         bytes32 nameHash = getHashOfName(_name);
@@ -163,14 +174,6 @@ contract DMDRegistrarController is Initializable, OwnableUpgradeable, ValueGuard
 
     function name(address node) external view returns (string memory) {
         return string(names[node]);
-    }
-
-    /**
-     * ENS compatible function to get the address of a node
-     * @param node The address of the node
-     */
-    function addr(bytes32 node) public view returns (address) {
-        return namesReverse[node];
     }
 
     function available(string calldata _name) public view returns (bool) {
@@ -219,7 +222,7 @@ contract DMDRegistrarController is Initializable, OwnableUpgradeable, ValueGuard
         return true;
     }
 
-    function _activate(string memory name) private { }
+    function _activate(string memory _name) private { }
 
     function _mintingFeeAllowedValues() private pure returns (uint256[] memory) {
         uint256[] memory values = new uint256[](10);
