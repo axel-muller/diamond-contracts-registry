@@ -4,6 +4,12 @@ pragma solidity >=0.8.4;
 // Original ENS registry interface.
 // Reference: https://github.com/ensdomains/ens-contracts/blob/staging/contracts/registry/ENS.sol
 interface IENS {
+    struct Record {
+        address owner;
+        address resolver;
+        uint64 ttl;
+    }
+
     // Logged when the owner of a node assigns a new owner to a subnode.
     event NewOwner(bytes32 indexed node, bytes32 indexed label, address owner);
 
