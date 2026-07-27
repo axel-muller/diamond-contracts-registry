@@ -425,12 +425,15 @@ contract DMDRegistrarControllerTest is Test {
         assertEq(registry.owner(_nodeOf("alice")), address(registrar));
     }
 
-    function test_BlockName_ClearsReverseRecord() public {
+    function test_ModerateName_ClearsReverseRecord() public {
         string memory name = "alice";
+        string memory reason = "Scam / phishing impersonation";
+        string memory notes = "sent phishing links in discord";
+
         _registerName(alice, name);
 
         vm.prank(owner);
-        registrar.blockName(name, alice);
+        registrar.moderateName(alice, name, reason, notes);
 
         bytes32 reverseNode = _reverseNodeOf(alice);
         assertEq(resolver.name(reverseNode), "");
