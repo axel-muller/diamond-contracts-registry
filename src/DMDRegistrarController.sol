@@ -104,6 +104,9 @@ contract DMDRegistrarController is
     /// @notice Emitted when a name's registration term is extended.
     event NameRenewed(address indexed owner, bytes32 indexed labelHash, uint256 indexed expiration, string name);
 
+    /// @notice Emitted when name was blocked by governance voting.
+    event NameModerated(address indexed owmer, bytes32 indexed labelHash, string reason, string note);
+
     /// @notice Emitted when the minting fee is updated.
     event SetMintingFee(uint256 indexed value);
 
@@ -184,7 +187,12 @@ contract DMDRegistrarController is
     /// @notice Blocks a name and deactivates it if it is currently active.
     /// @param _name The name to block
     /// @param _owner Current active registrant of the name
-    function blockName(string calldata _name, address _owner) external activeRegistrar onlyOwner {
+    function moderateName(
+        address _owner,
+        string calldata _name,
+        string calldata reason,
+        string calldata notes
+    ) external activeRegistrar onlyOwner {
         bytes32 labelHash = NameUtils.labelHash(_name);
         address registrant = namesReverse[labelHash];
 
@@ -197,6 +205,8 @@ contract DMDRegistrarController is
         }
 
         _setNameBlocked(_name, true);
+
+        emit NameModerated(_owner, labelHash, reason, notes);
     }
 
     /// @notice Registers a `.dmd` name, minting its token to the caller.

@@ -13,11 +13,11 @@ declare -a contracts=(
     "src/DMDResolver.sol"
 )
 
-mkdir -p abi
+mkdir -p "$abi_dir"
 
 echo "Building..."
 
-if forge build > /dev/null 2>&1 ; then
+if forge build --skip test --skip script > /dev/null 2>&1 ; then
     echo "Build finished."
 else
     echo "Build failed"
