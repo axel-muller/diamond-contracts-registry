@@ -5,7 +5,7 @@ import { Script } from "forge-std/Script.sol";
 import { console } from "forge-std/console.sol";
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { Upgrades } from "openzeppelin-foundry-upgrades/Upgrades.sol";
+import { Options, Upgrades } from "openzeppelin-foundry-upgrades/Upgrades.sol";
 
 import { DMDNames } from "src/DMDNames.sol";
 import { DMDRegistrarController } from "src/DMDRegistrarController.sol";
@@ -44,10 +44,14 @@ contract Deploy is Script {
     function deploy(DeploymentConfig memory cfg, bool release) public {
         uint256 initialTransferFee = MINTING_FEE / 10;
 
+        Options memory opts;
+
         address proxyAdminOwner = cfg.initialOwner;
         if (release) {
             proxyAdminOwner = cfg.dao;
         }
+
+        opts.unsafeSkipProxyAdminCheck = true;
 
         vm.startBroadcast();
 
@@ -55,7 +59,8 @@ contract Deploy is Script {
             Upgrades.deployTransparentProxy(
                 "DMDRegistry.sol:DMDRegistry",
                 proxyAdminOwner,
-                abi.encodeCall(DMDRegistry.initialize, (cfg.initialOwner))
+                abi.encodeCall(DMDRegistry.initialize, (cfg.initialOwner)),
+                opts
             )
         );
 
@@ -65,7 +70,8 @@ contract Deploy is Script {
                 proxyAdminOwner,
                 abi.encodeCall(
                     DMDNames.initialize, (cfg.initialOwner, cfg.reinsertPot, initialTransferFee, cfg.baseUri)
-                )
+                ),
+                opts
             )
         );
 
@@ -73,7 +79,8 @@ contract Deploy is Script {
             Upgrades.deployTransparentProxy(
                 "DMDResolver.sol:DMDResolver",
                 proxyAdminOwner,
-                abi.encodeCall(DMDResolver.initialize, (address(registry)))
+                abi.encodeCall(DMDResolver.initialize, (address(registry))),
+                opts
             )
         );
 
@@ -84,7 +91,8 @@ contract Deploy is Script {
                 abi.encodeCall(
                     DMDRegistrarController.initialize,
                     (cfg.initialOwner, cfg.reinsertPot, address(names), address(registry), address(resolver))
-                )
+                ),
+                opts
             )
         );
 
@@ -98,8 +106,8 @@ contract Deploy is Script {
         registry.setSubnodeOwner(REVERSE_NODE, ADDR_LABEL, address(controller));
 
         if (release) {
-            registry.setOwner(ROOT_NODE, cfg.dao);
             registry.setSubnodeOwner(ROOT_NODE, REVERSE_LABEL, cfg.dao);
+            registry.setOwner(ROOT_NODE, cfg.dao);
 
             Ownable(address(names)).transferOwnership(cfg.dao);
             Ownable(address(controller)).transferOwnership(cfg.dao);

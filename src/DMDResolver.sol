@@ -24,6 +24,9 @@ contract DMDResolver is Initializable, ERC165Upgradeable, IResolver, IExtendedRe
     /// @notice Reverse records: node namehash -> human-readable name.
     mapping(bytes32 => string) public names;
 
+    /// @notice Thrown when `resolve` is called with an unsupported selector.
+    error UnsupportedResolverFunc(bytes4 selector);
+
     /// @dev Restricts a write to the owner of `node` or one of its approved operators
     /// @param node The node whose record is being written.
     modifier authorised(bytes32 node) {
@@ -89,6 +92,16 @@ contract DMDResolver is Initializable, ERC165Upgradeable, IResolver, IExtendedRe
     /// @param data The ABI-encoded inner resolver call (e.g. `addr(bytes32)`).
     /// @return The ABI-encoded result of the inner call.
     function resolve(bytes calldata, bytes calldata data) external view override returns (bytes memory) {
+        bytes4 selector = bytes4(data);
+        if (selector != IAddrResolver.addr.selector && selector != INameResolver.name.selector) {
+            revert UnsupportedResolverFunc(selector);
+        }
+
+        // 4 bytes selector + 32 bytes hash
+        if (data.length != 36) {
+            revert UnsupportedResolverFunc(selector);
+        }
+
         (bool success, bytes memory result) = address(this).staticcall(data);
 
         if (success) {

@@ -39,6 +39,9 @@ contract DMDNames is Initializable, OwnableUpgradeable, ERC721Base {
     /// @notice Emitted when the registrar address is updated.
     event SetRegistrar(address indexed registrar);
 
+    /// @notice Emitted when metadata URI is updated.
+    event SetBaseURI(string _uri);
+
     /// @notice Emitted when a token's expiration is extended.
     event Renew(uint256 indexed id, uint256 indexed expiration);
 
@@ -77,20 +80,28 @@ contract DMDNames is Initializable, OwnableUpgradeable, ERC721Base {
         transferFee = _transferFee;
     }
 
-    /// @notice Updates the fee required for user-initiated transfers.
-    /// @param _transferFee The new transfer fee value
-    function setTransferFee(uint256 _transferFee) external onlyRegistrar {
-        transferFee = _transferFee;
-
-        emit SetTransferFee(_transferFee);
-    }
-
     /// @notice Sets the registrar authorised to mint, renew and burn names.
     /// @param _registrar The registrar controller address
     function setRegistrar(address _registrar) external onlyOwner {
         registrar = IDMDRegistrarController(_registrar);
 
         emit SetRegistrar(_registrar);
+    }
+
+    /// @notice Sets token metadata base URI.
+    /// @param _baseUri The new base URI
+    function setBaseURI(string calldata _baseUri) external onlyOwner {
+        baseURI = _baseUri;
+
+        emit SetBaseURI(_baseUri);
+    }
+
+    /// @notice Updates the fee required for user-initiated transfers.
+    /// @param _transferFee The new transfer fee value
+    function setTransferFee(uint256 _transferFee) external onlyRegistrar {
+        transferFee = _transferFee;
+
+        emit SetTransferFee(_transferFee);
     }
 
     /// @notice Mints a name token with an expiration.
